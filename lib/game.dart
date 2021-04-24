@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:fludo/board/board.dart';
@@ -10,8 +11,14 @@ import 'package:fludo/result/result.dart';
 import 'package:fludo/result/result_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_socket_io/flutter_socket_io.dart';
+import 'package:flutter_socket_io/socket_io_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:fludo/players/players_notifier.dart';
+
+import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart';
+import 'package:web_socket_channel/io.dart';
 
 import 'dice/dice.dart';
 import 'dice/dice_base.dart';
@@ -22,6 +29,7 @@ class FludoGame extends StatefulWidget {
 }
 
 class _FludoGameState extends State<FludoGame> with TickerProviderStateMixin {
+  SocketIO socketIO;
   Animation<Color> _playerHighlightAnim;
   Animation<double> _diceHighlightAnim;
   AnimationController _playerHighlightAnimCont, _diceHighlightAnimCont;
@@ -51,6 +59,15 @@ class _FludoGameState extends State<FludoGame> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    print('call_out_my_name');
+    try {
+      _connectSocket();
+    } on WebSocketException catch (e) {
+      debugPrint(e.toString());
+    }
+    print('Process Started');
+    // socketIO.on('connect', (data) => print(data));
+    // debugPrint(socketIO.connected.toString());
 
     SystemChrome.setEnabledSystemUIOverlays([]); //full screen
     SystemChrome.setPreferredOrientations([
@@ -93,6 +110,21 @@ class _FludoGameState extends State<FludoGame> with TickerProviderStateMixin {
     _playerHighlightAnimCont.dispose();
     _diceHighlightAnimCont.dispose();
     super.dispose();
+  }
+
+  void _connectSocket() async {
+    socketIO = SocketIOManager().createSocketIO('https://localhost:3000', '/');
+
+    socketIO.init();
+
+    print('line 72');
+    // socketIO.emit("/test", 'test');
+    print('line 74');
+    socketIO.subscribe('player_connected', (jsonData) {
+      //Convert the JSON data received into a Map
+      print(jsonData);
+    });
+    socketIO.connect();
   }
 
   @override
@@ -233,7 +265,7 @@ class _FludoGameState extends State<FludoGame> with TickerProviderStateMixin {
         playerPawns.add(SizedBox.expand(
           child: AnimatedBuilder(
             builder: (_, child) => CustomPaint(
-              //data
+                //data
                 painter: PlayersPainter(
                     playerCurrentSpot: //offset
                         _playerAnimList[playerIndex][pawnIndex].value,
@@ -328,8 +360,8 @@ class _FludoGameState extends State<FludoGame> with TickerProviderStateMixin {
   }
 
   _checkDiceResultValidity() {
+    socketIO.sendMessage('dice_output', _diceOutput.toString());
     var isValid = false;
-
     for (var stepInfo in _pawnCurrentStepInfo[_currentTurn]) {
       if (_diceOutput == 6) {
         if (_straightSixesCounter ==
